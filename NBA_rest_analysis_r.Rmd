@@ -1,0 +1,136 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+
+library(tidyverse)
+library(gganimate)
+library(stringr)
+library(lubridate)
+
+```
+
+
+```{r}
+#filtered to eliminate breaks between seasons. 
+
+start <- '7-30'
+end <- '11-11'
+
+team_analysis <- read_csv(file = 'nba_glog_14_23.csv') %>%
+  filter(Days >= 0) %>%
+  filter(Days <= 100) %>%
+  filter(Days != 0) %>%
+  mutate(Date = as.Date(Date), year= year(Date)) %>%
+  filter(!(Date >= ymd(paste(year, start, sep = '-')) &
+           Date <= ymd(paste(year,end, sep = '-'))))
+
+team_analysis
+```
+
+
+
+```{r}
+# 1 day of rest = .5 pt
+
+n <- glm(Tm_PTS ~ I(Days - 1), data = team_analysis) 
+  summary(n)
+
+```
+
+
+
+```{r}
+n <- glm(Tm_PTS-Opp_PTS ~ I(Days - 1), data = team_analysis) 
+  summary(n)
+```
+
+
+
+```{r}
+n <- glm(Tm_PTS-Opp_PTS ~ I(Days - 1) + `A/H`, data = team_analysis) 
+  summary(n)
+  
+```
+
+
+
+```{r}
+# very small positive increase 
+
+input_y <- 'Tm_PTS'
+
+
+ team_analysis %>%
+  filter(Days <= 3) %>%
+  rename(Away_Home = 'A/H') %>%
+  ggplot(aes(x=Days, y= .data[[input_y]])) +
+  
+  geom_jitter(alpha =.15, width = 0.2) +
+  geom_smooth(method = 'lm', color = 'green') +
+   facet_grid(rows = 'Away_Home')
+
+```
+
+
+
+```{r}
+# density plot to visualize effect of rest on team points per days of rest and either home or away
+
+input_y <- 'Tm_PTS'
+
+team_analysis %>%
+  filter(Days <= 3) %>%
+  rename(Away_Home = 'A/H') %>%
+  
+  ggplot(aes(x=.data[[input_y]])) +
+  geom_density() +
+ facet_grid(rows = 'Days') +
+  facet_grid(rows = vars(Days), cols = vars(Away_Home))
+
+
+```
+
+
+
+```{r}
+# average team points per day of rest and whether home or away
+
+
+input_y <- 'Tm_PTS'
+
+team_analysis %>%
+rename(Away_Home = 'A/H') %>%
+group_by(Days, Away_Home) %>%
+filter(Days <=5) %>%
+summarise(mean = mean(.data[[input_y]], na.rm=T)) %>%
+  pivot_wider(names_from = Away_Home, values_from = mean) %>%
+rename(Away = 'A') %>%
+  rename(Home = 'H')
+
+
+```
+
+
+
+```{r}
+#Home win% compared to Opp rest
+
+# How to read chart: The Days col contains the days of rest for the home team. The columns represent the away team's rest. Find the correspoding days of rest to find out the home team's win percentage based off of opponent's rest.
+
+team_rest_diff %>%
+  mutate(Home_Tm_W = as.numeric(Tm_PTS - Opp_PTS > 0)) %>%
+  group_by(Days, Opp_Days) %>%
+  summarize(mean = mean(Home_Tm_W), .groups = 'drop') %>%
+  filter(Days <= 5) %>%
+  pivot_wider(names_from = Opp_Days, values_from = mean) %>%
+  select(Days, `1`, `2`, `3`, `4`, `5`)
+
+```
+
+
+
+
